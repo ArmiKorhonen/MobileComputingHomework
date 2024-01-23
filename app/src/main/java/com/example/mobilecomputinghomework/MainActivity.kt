@@ -13,9 +13,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -23,12 +28,17 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.navigation.NavController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 
 
 // Data class for PuppyProfile
@@ -57,42 +67,82 @@ val puppies = listOf(
 
 // MainActivity is the entry point of the app.
 class MainActivity : ComponentActivity() {
-
-    // onCreate is the first method that gets called when the activity starts.
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // setContent is a Jetpack Compose function that defines the UI content of the activity.
-        // Here, it calls the AppMainScreen composable function to build the app's UI.
         setContent {
-            AppMainScreen()
+            AppTheme {
+                val navController = rememberNavController()
+                NavHost(navController = navController, startDestination = "frontPage") {
+                    composable("frontPage") { FrontPage(navController) }
+                    composable("mainScreen") { AppMainScreen(navController) }
+                }
+            }
+        }
+    }
+}
+
+//"Front page" of the app
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FrontPage(navController: NavController) {
+    Scaffold {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(it), // 'it' refers to the padding provided by Scaffold
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                "Welcome to the Puppy Friend Finder!",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(16.dp)
+            )
+            Text(
+                "Find new friends for your puppy and get socializing! Tap on a puppy picture to view more details about them. Scroll to see more puppies!",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(16.dp)
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Button(onClick = { navController.navigate("mainScreen") }) {
+                Text("Go to Puppy Friend Finder")
+            }
         }
     }
 }
 
 
+
+
+
 // Opt-in annotation to use experimental Material 3 API features.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppMainScreen() {
+fun AppMainScreen(navController: NavController) {
     // State to keep track of the selected puppy for displaying details.
     val selectedPuppy = remember { mutableStateOf<PuppyProfile?>(null) }
-
-    // State to control the visibility of the welcome dialog on app start.
-    val showWelcomeDialog = remember { mutableStateOf(true) }
 
     // Scaffold provides basic material design layout structure.
     Scaffold(
         // Defines the top app bar of the app.
         topBar = {
             TopAppBar(
-                // Customize the colors of the TopAppBar.
+                title = { Text("Puppy Friend Finder") },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        navController.navigate("frontPage") {
+                            // Clearing everything up to the 'frontPage' from the back stack
+                            popUpTo("frontPage") { inclusive = true }
+                        }
+                    }) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Go back")
+                    }
+
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.primary,
-                ),
-                // Set the title of the TopAppBar.
-                title = { Text("Puppy Friend Finder") }
+                )
             )
         }
     ) { innerPadding ->
@@ -111,10 +161,6 @@ fun AppMainScreen() {
                 )
             }
 
-            // Shows the welcome dialog when the app starts.
-            if (showWelcomeDialog.value) {
-                WelcomeDialog(onDismiss = { showWelcomeDialog.value = false })
-            }
         }
     }
 }
@@ -227,28 +273,6 @@ fun PuppyDetailDialog(puppy: PuppyProfile?, onDismiss: () -> Unit) {
     }
 }
 
-
-// Composable function to display a welcome dialog when the app starts.
-@Composable
-fun WelcomeDialog(onDismiss: () -> Unit) {
-    // AlertDialog is used to create a pop-up dialog box.
-    AlertDialog(
-        onDismissRequest = onDismiss, // Action to perform when the dialog is requested to be closed, typically by a back press.
-        title = { Text("Welcome to the Puppy Friend Finder!", // The title of the dialog.
-            style = MaterialTheme.typography.titleLarge, // Styling for the title text
-            color = MaterialTheme.colorScheme.secondary) },
-        text = {
-            // The body text of the dialog, providing instructions and information about the app.
-            Text("Find new friends for your puppy and get socializing! Tap on a puppy picture to view more details about them. Scroll to see more puppies!")
-        },
-        confirmButton = {
-            // Defines the confirm button with a 'Close' label. Clicking this button will dismiss the dialog.
-            TextButton(onClick = onDismiss) {
-                Text("Close")
-            }
-        }
-    )
-}
 
 
 
