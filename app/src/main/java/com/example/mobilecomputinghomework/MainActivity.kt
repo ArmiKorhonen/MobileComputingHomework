@@ -35,24 +35,27 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.runtime.livedata.observeAsState
+
 
 
 // Data class for PuppyProfile
-data class PuppyProfile(
+/*data class PuppyProfile(
     val id: Int,
     val name: String,
     val breed: String,
     val imageResId: Int,
     val bio: String
-)
+)*/
 
 
 // Data for puppy profiles
-val puppies = listOf(
+/*val puppies = listOf(
     PuppyProfile(1, "Max", "Golden Retriever", R.drawable.max, "Professional sock thief. Loves to play fetch and dreams of chasing squirrels all day."),
     PuppyProfile(2, "Bella", "Beagle", R.drawable.bella, "Sniffing out snacks and cuddles! Can howl the melody of 'Happy Birthday' and loves belly rubs."),
     PuppyProfile(3, "Charlie", "French Bulldog", R.drawable.charlie, "Small but mighty! Enjoys lounging in the sun and is a connoisseur of fine dog treats."),
@@ -63,19 +66,31 @@ val puppies = listOf(
     PuppyProfile(8, "Lucy", "Boxer", R.drawable.lucy, "Bouncy and full of energy. Can jump over anything and loves a good game of tug-of-war."),
     PuppyProfile(9, "Bailey", "Poodle", R.drawable.bailey, "Elegant and intelligent. Enjoys puzzle toys and is a master of stylish hairdos."),
     PuppyProfile(10, "Sadie", "Border Collie", R.drawable.sadie, "Energetic and intelligent. Loves learning new tricks and herding anything that moves.")
-)
+)*/
+
 
 // MainActivity is the entry point of the app.
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize the ViewModel
+        val app = application as PuppyDatingApp
+        val dao = app.database.puppyProfileDao()
+        val factory = PuppyViewModelFactory(dao)
+        val viewModel = ViewModelProvider(this, factory)[PuppyViewModel::class.java]
+
         setContent {
             AppTheme {
                 val navController = rememberNavController()
+                val puppies = viewModel.puppies.observeAsState(listOf()).value
+
                 NavHost(navController = navController, startDestination = "frontPage") {
                     composable("frontPage") { FrontPage(navController) }
-                    composable("mainScreen") { AppMainScreen(navController) }
+                    composable("mainScreen") { AppMainScreen(navController, puppies) }
+                    composable("createPuppyProfile") { CreatePuppyProfileScreen(navController) }
                 }
+
             }
         }
     }
@@ -107,37 +122,34 @@ fun FrontPage(navController: NavController) {
             Button(onClick = { navController.navigate("mainScreen") }) {
                 Text("Go to Puppy Friend Finder")
             }
+            Spacer(modifier = Modifier.height(16.dp)) // Add space between the buttons
+            Button(onClick = { navController.navigate("createPuppyProfile") }) {
+                Text("Create your own puppy profile")
+            }
+
         }
     }
 }
 
-
-
-
-
 // Opt-in annotation to use experimental Material 3 API features.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppMainScreen(navController: NavController) {
+fun AppMainScreen(navController: NavController, puppies: List<PuppyProfile>) {
     // State to keep track of the selected puppy for displaying details.
     val selectedPuppy = remember { mutableStateOf<PuppyProfile?>(null) }
 
-    // Scaffold provides basic material design layout structure.
     Scaffold(
-        // Defines the top app bar of the app.
         topBar = {
             TopAppBar(
                 title = { Text("Puppy Friend Finder") },
                 navigationIcon = {
                     IconButton(onClick = {
                         navController.navigate("frontPage") {
-                            // Clearing everything up to the 'frontPage' from the back stack
                             popUpTo("frontPage") { inclusive = true }
                         }
                     }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Go back")
                     }
-
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -146,27 +158,20 @@ fun AppMainScreen(navController: NavController) {
             )
         }
     ) { innerPadding ->
-        // Box layout to hold the content of the screen.
         Box(modifier = Modifier.padding(innerPadding)) {
-            // Grid of puppy images. On clicking an image, updates the selectedPuppy state.
             PuppyGrid(puppies) { puppy ->
                 selectedPuppy.value = puppy
             }
 
-            // Displays the puppy detail dialog if a puppy is selected.
             selectedPuppy.value?.let {
                 PuppyDetailDialog(
                     puppy = it,
                     onDismiss = { selectedPuppy.value = null }
                 )
             }
-
         }
     }
 }
-
-
-
 
 // Custom theme wrapper function for the app.
 @Composable
@@ -176,8 +181,6 @@ fun AppTheme(content: @Composable () -> Unit) {
         content()
     }
 }
-
-
 
 // A composable function that displays a grid of puppy images.
 @Composable
@@ -207,11 +210,11 @@ fun PuppyImageItem(puppy: PuppyProfile, onPuppyClick: (PuppyProfile) -> Unit) {
             .clickable { onPuppyClick(puppy) }, // Makes the card clickable, triggering onPuppyClick with the puppy's profile when clicked.
     ) {
         // Image composable to display the puppy's picture.
-        Image(
+        /*Image(
             painter = painterResource(id = puppy.imageResId), // Loads the image resource.
             contentDescription = "Puppy image", // Provides a content description for accessibility.
             modifier = Modifier.size(170.dp) // Sets the size of the image.
-        )
+        )*/
     }
 }
 
@@ -229,14 +232,14 @@ fun PuppyDetailDialog(puppy: PuppyProfile?, onDismiss: () -> Unit) {
                 // Column layout to display the puppy's image and text details vertically.
                 Column {
                     // Displays the puppy's image.
-                    Image(
+                    /*Image(
                         painter = painterResource(id = puppy.imageResId), // Loads the image from resources.
                         contentDescription = "Puppy image", // Accessibility description of the image.
                         modifier = Modifier
                             .fillMaxWidth() // Image occupies the maximum width available.
                             .height(300.dp) // Fixed height for the image.
                             .clip(RoundedCornerShape(8.dp)) // Rounded corners for the image.
-                    )
+                    )*/
                     Spacer(Modifier.height(8.dp)) // Spacer to add some space between the image and the text.
                     // Displaying the puppy's breed with mixed styling.
                     Text(
@@ -270,6 +273,36 @@ fun PuppyDetailDialog(puppy: PuppyProfile?, onDismiss: () -> Unit) {
                 }
             }
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CreatePuppyProfileScreen(navController: NavController) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Create New Puppy Profile") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Go back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            )
+        }
+    ) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding)) {
+            // Your content goes here. For example, form fields to create a new puppy profile.
+            // This is just a placeholder for your actual content.
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Form fields for creating a new puppy profile go here.")
+                // Add your form fields and submit button here
+            }
+        }
     }
 }
 
