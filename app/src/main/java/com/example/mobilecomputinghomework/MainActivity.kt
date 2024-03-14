@@ -1,9 +1,11 @@
 package com.example.mobilecomputinghomework
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -12,7 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
@@ -29,8 +30,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +40,17 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.TextField
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import com.example.mobilecomputinghomework.PuppyProfile
 
 
 
@@ -88,7 +98,7 @@ class MainActivity : ComponentActivity() {
                 NavHost(navController = navController, startDestination = "frontPage") {
                     composable("frontPage") { FrontPage(navController) }
                     composable("mainScreen") { AppMainScreen(navController, puppies) }
-                    composable("createPuppyProfile") { CreatePuppyProfileScreen(navController) }
+                    composable("createPuppyProfile") { CreatePuppyProfileScreen(navController, viewModel) }
                 }
 
             }
@@ -185,6 +195,14 @@ fun AppTheme(content: @Composable () -> Unit) {
 // A composable function that displays a grid of puppy images.
 @Composable
 fun PuppyGrid(puppies: List<PuppyProfile>, onPuppyClick: (PuppyProfile) -> Unit) {
+    Log.d("PuppyGrid", "Puppies count: ${puppies.size}")
+
+    /*Column {
+        puppies.forEach { puppy ->
+            Text("Puppy name: ${puppy.name}", modifier = Modifier.padding(8.dp))
+        }
+    }*/
+
     // LazyVerticalGrid is used to create a grid layout that lazily loads its content. Good for large number of items.
     LazyVerticalGrid(
         // GridCells.Fixed creates a grid with a fixed number of columns.
@@ -196,6 +214,7 @@ fun PuppyGrid(puppies: List<PuppyProfile>, onPuppyClick: (PuppyProfile) -> Unit)
         items(puppies.size) { index ->
             // PuppyImageItem displays the individual puppy image. It takes a puppy profile and a click handler as parameters.
             PuppyImageItem(puppy = puppies[index], onPuppyClick = onPuppyClick)
+
         }
     }
 }
@@ -203,18 +222,26 @@ fun PuppyGrid(puppies: List<PuppyProfile>, onPuppyClick: (PuppyProfile) -> Unit)
 // Composable function to display an individual puppy image item.
 @Composable
 fun PuppyImageItem(puppy: PuppyProfile, onPuppyClick: (PuppyProfile) -> Unit) {
-    // Card is used to provide a material design card layout for each puppy image.
+    Log.d("PuppyGrid", "Puppy image: ${puppy.imageUri}")
     Card(
         modifier = Modifier
-            .padding(8.dp) // Adds padding around the card.
-            .clickable { onPuppyClick(puppy) }, // Makes the card clickable, triggering onPuppyClick with the puppy's profile when clicked.
+            .padding(8.dp)
+            .clickable { onPuppyClick(puppy) },
     ) {
-        // Image composable to display the puppy's picture.
-        /*Image(
-            painter = painterResource(id = puppy.imageResId), // Loads the image resource.
-            contentDescription = "Puppy image", // Provides a content description for accessibility.
-            modifier = Modifier.size(170.dp) // Sets the size of the image.
-        )*/
+        // Use AsyncImage from Coil to load the image from the URI
+        AsyncImage(
+            model = puppy.imageUri,
+            contentDescription = "Puppy image",
+            modifier = Modifier
+                .size(170.dp)
+                .fillMaxWidth(),
+            contentScale = ContentScale.Crop,
+            onError = { error ->
+                Log.d("PuppyGrid", "Error loading image: ${error.result.throwable}")
+            },
+            //fallback = painterResource(id = R.drawable.fallback_image) // Placeholder in case of error
+        )
+
     }
 }
 
@@ -232,14 +259,19 @@ fun PuppyDetailDialog(puppy: PuppyProfile?, onDismiss: () -> Unit) {
                 // Column layout to display the puppy's image and text details vertically.
                 Column {
                     // Displays the puppy's image.
-                    /*Image(
-                        painter = painterResource(id = puppy.imageResId), // Loads the image from resources.
-                        contentDescription = "Puppy image", // Accessibility description of the image.
+                    // Use AsyncImage from Coil to load the image from the URI
+                    AsyncImage(
+                        model = puppy.imageUri,
+                        contentDescription = "Puppy image",
                         modifier = Modifier
-                            .fillMaxWidth() // Image occupies the maximum width available.
-                            .height(300.dp) // Fixed height for the image.
-                            .clip(RoundedCornerShape(8.dp)) // Rounded corners for the image.
-                    )*/
+                            .size(170.dp)
+                            .fillMaxWidth(),
+                        contentScale = ContentScale.Crop,
+                        onError = { error ->
+                            Log.d("PuppyGrid", "Error loading image: ${error.result.throwable}")
+                        },
+                        //fallback = painterResource(id = R.drawable.fallback_image) // Placeholder in case of error
+                    )
                     Spacer(Modifier.height(8.dp)) // Spacer to add some space between the image and the text.
                     // Displaying the puppy's breed with mixed styling.
                     Text(
@@ -278,29 +310,72 @@ fun PuppyDetailDialog(puppy: PuppyProfile?, onDismiss: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreatePuppyProfileScreen(navController: NavController) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Create New Puppy Profile") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Go back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            )
+fun CreatePuppyProfileScreen(navController: NavController, viewModel: PuppyViewModel) {
+    // State variables to store form inputs
+    val name = remember { mutableStateOf("") }
+    val breed = remember { mutableStateOf("") }
+    val bio = remember { mutableStateOf("") }
+    val imageUri = remember { mutableStateOf("") }
+
+    val context = LocalContext.current // This gets the context within Compose
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri: Uri? ->
+            uri?.let {
+                // Obtain persistable URI permissions
+                val takeFlags: Int = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+
+                // Now you can safely store the URI in your database
+                imageUri.value = it.toString()
+            }
         }
+    )
+
+
+    Scaffold(
+        topBar = { /* Your TopAppBar code here */ }
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
-            // Your content goes here. For example, form fields to create a new puppy profile.
-            // This is just a placeholder for your actual content.
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Form fields for creating a new puppy profile go here.")
-                // Add your form fields and submit button here
+                TextField(
+                    value = name.value,
+                    onValueChange = { name.value = it },
+                    label = { Text("Name") }, // This replaces the decorationBox for hint
+                    singleLine = true, // Makes it a single line TextField
+                    modifier = Modifier.fillMaxWidth() // To make the TextField take the full width
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextField(
+                    value = breed.value,
+                    onValueChange = { breed.value = it },
+                    label = { Text("Breed") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextField(
+                    value = bio.value,
+                    onValueChange = { bio.value = it },
+                    label = { Text("Bio") },
+                    singleLine = false, // Assuming the bio might be multi-line
+                    modifier = Modifier.fillMaxWidth().height(100.dp) // Adjust the height for multiline input
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(onClick = { launcher.launch("image/*") }) {
+                    Text("Select Image")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = {
+                    // Here you would call a function in your ViewModel to insert the new puppy profile
+                    viewModel.insertPuppyProfile(name.value, breed.value, imageUri.value, bio.value)
+                    navController.popBackStack() // Go back after insertion
+                }) {
+                    Text("Create Puppy Profile")
+                }
             }
         }
     }
