@@ -1,8 +1,15 @@
 package com.example.mobilecomputinghomework
 
+import android.Manifest
 import android.content.Intent
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings.Global.getString
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -50,8 +57,16 @@ import androidx.compose.material3.TextField
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
-import com.example.mobilecomputinghomework.PuppyProfile
-
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.pm.PackageManager
+import android.provider.Settings
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 
 
 // Data class for PuppyProfile
@@ -80,7 +95,93 @@ import com.example.mobilecomputinghomework.PuppyProfile
 
 
 // MainActivity is the entry point of the app.
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), SensorEventListener {
+
+    companion object {
+        const val CHANNEL_ID = "channel_id"
+        const val NOTIFICATION_ID = 101
+        private val REQUEST_CODE_POST_NOTIFICATIONS = 101 // This is a request code you define for handling permission result
+    }
+
+
+    private lateinit var sensorManager: SensorManager
+    private var accelerometer: Sensor? = null
+    private val accelerometerReading = mutableStateOf("No data")
+    // Timestamp of the last notification
+    private var lastNotificationTime: Long = 0
+
+    // Minimum delay between notifications (e.g., 10000 milliseconds = 10 seconds)
+    private val notificationCooldown: Long = 10000
+
+    private fun checkAndRequestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_CODE_POST_NOTIFICATIONS)
+            }
+        }
+    }
+
+    // Handle the permission request result
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_CODE_POST_NOTIFICATIONS && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            // Permission granted, you can proceed with showing a notification
+            // Depending on your app's flow, you might need to trigger the notification showing logic here again
+        }
+    }
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = getString(R.string.channel_name)
+            val descriptionText = getString(R.string.channel_description)
+
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
+                description = descriptionText
+            }
+            val notificationManager: NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun sendTiltNotification() {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastNotificationTime > notificationCooldown) {
+            val intent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                putExtra("showDialog", true) // Custom flag to indicate dialog should be shown
+            }
+            val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+            val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.drawable.dog) // replace with your own icon
+                .setContentTitle("Who let the dogs out?")
+                .setContentText("You might've let the dogs out by tilting your phone so much!")
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true) // Removes the notification when tapped
+
+            with(NotificationManagerCompat.from(this)) {
+                if (ActivityCompat.checkSelfPermission(
+                        this@MainActivity,
+                        Manifest.permission.POST_NOTIFICATIONS
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    // TODO: Consider calling
+                    //    ActivityCompat#requestPermissions
+                    // here to request the missing permissions, and then overriding
+                    //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                    //                                          int[] grantResults)
+                    // to handle the case where the user grants the permission. See the documentation
+                    // for ActivityCompat#requestPermissions for more details.
+                    return
+                }
+                notify(NOTIFICATION_ID, builder.build()) // NOTIFICATION_ID is a unique int for each notification that you must define
+            }
+            // Update lastNotificationTime
+            lastNotificationTime = currentTime
+        }
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -89,6 +190,9 @@ class MainActivity : ComponentActivity() {
         val dao = app.database.puppyProfileDao()
         val factory = PuppyViewModelFactory(dao)
         val viewModel = ViewModelProvider(this, factory)[PuppyViewModel::class.java]
+
+        val showDialog = intent.getBooleanExtra("showDialog", false)
+
 
         setContent {
             AppTheme {
@@ -100,11 +204,50 @@ class MainActivity : ComponentActivity() {
                     composable("mainScreen") { AppMainScreen(navController, puppies) }
                     composable("createPuppyProfile") { CreatePuppyProfileScreen(navController, viewModel) }
                 }
+            }
+        }
 
+        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
+        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        createNotificationChannel()
+        checkAndRequestNotificationPermission()
+
+    }
+
+    override fun onResume() {
+        super.onResume()
+        accelerometer?.also { accel ->
+            sensorManager.registerListener(this, accel, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        sensorManager.unregisterListener(this)
+    }
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        event?.let {
+            if (it.sensor.type == Sensor.TYPE_ACCELEROMETER) {
+                val x = it.values[0] // X-axis value
+                accelerometerReading.value = "X: $x Y: ${it.values[1]} Z: ${it.values[2]}"
+                //Log.d("Sensor", "Accelerometer data: ${accelerometerReading.value}")
+
+                // Check if the X-axis value meets the criteria for tilting
+                if (x > 9 || x < -9) {
+                    Log.d("Sensor", "Tilt detected, attempting to send notification.")
+                    sendTiltNotification()
+                }
             }
         }
     }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+        // Can be used to respond to changes in sensor accuracy.
+    }
+
 }
+
 
 //"Front page" of the app
 @OptIn(ExperimentalMaterial3Api::class)
@@ -380,6 +523,8 @@ fun CreatePuppyProfileScreen(navController: NavController, viewModel: PuppyViewM
         }
     }
 }
+
+
 
 
 
